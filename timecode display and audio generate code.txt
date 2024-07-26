@@ -1,0 +1,89 @@
+# Code For Decoding
+
+import numpy as np
+from scipy.io import wavfile
+
+def decode_smpte_timecode(audio_data, sample_rate, frame_rate):
+    """
+    Decode SMPTE timecode from the audio data.
+    
+    Args:
+        audio_data (numpy.ndarray): The audio data containing the SMPTE timecode.
+        sample_rate (int): The sample rate of the audio data.
+        frame_rate (int): The frame rate of the SMPTE timecode (24, 25, 29.97, or 30).
+    
+    Returns:
+        dict: A dictionary containing the decoded timecode components (hours, minutes, seconds, frames).
+    """
+    # Normalize the audio data
+    audio_data = audio_data / np.max(np.abs(audio_data))
+    
+    # Detect the timecode pulses
+    pulse_indices = np.where(audio_data > 0.5)[0]
+    
+    # Calculate the timecode components
+    frames = len(pulse_indices) % frame_rate
+    seconds = (len(pulse_indices) // frame_rate) % 60
+    minutes = (len(pulse_indices) // (frame_rate * 60)) % 60
+    hours = (len(pulse_indices) // (frame_rate * 60 * 60)) % 24
+    
+    return {
+        "hours": hours,
+        "minutes": minutes,
+        "seconds": seconds,
+        "frames": frames
+    }
+
+# Load the SMPTE timecode audio file
+sample_rate, audio_data = wavfile.read('/content/smpte_timecode.wav')
+
+# Decode the SMPTE timecode (assuming 30 fps)
+timecode = decode_smpte_timecode(audio_data, sample_rate, frame_rate=30)
+
+# Print the decoded timecode
+print(f"Timecode: {timecode['hours']:02d}:{timecode['minutes']:02d}:{timecode['seconds']:02d}:{timecode['frames']:02d}")
+
+
+
+
+
+#Code for Generating Audio
+
+import numpy as np
+import wave
+import os
+
+def generate_smpte_timecode_wav(output_file, hours, minutes, seconds, frames, sample_rate=48000):
+    """
+    Generate a SMPTE timecode WAV file with the specified timecode.
+    
+    Args:
+        output_file (str): The path to the output WAV file.
+        hours (int): The hours component of the timecode.
+        minutes (int): The minutes component of the timecode.
+        seconds (int): The seconds component of the timecode.
+        frames (int): The frames component of the timecode.
+        sample_rate (int): The sample rate of the WAV file.
+    """
+    # Calculate the total number of frames
+    frame_rate = 30  # Assuming 30 fps
+    total_frames = (hours * 3600 * frame_rate) + (minutes * 60 * frame_rate) + (seconds * frame_rate) + frames
+    
+    # Create the SMPTE timecode signal
+    timecode_signal = np.zeros(total_frames)
+    for i in range(total_frames):
+        # Generate a pulse at the start of each frame
+        timecode_signal[i] = 1
+    
+    # Normalize the signal to the range [-1, 1]
+    timecode_signal = timecode_signal / np.max(np.abs(timecode_signal))
+    
+    # Create the WAV file
+    with wave.open(output_file, 'w') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes((timecode_signal * 32767).astype(np.int16).tobytes())
+
+# Generate a SMPTE timecode WAV file with the timecode 01:48:23:25
+generate_smpte_timecode_wav('smpte_timecode.wav', hours=1, minutes=48, seconds=23, frames=25)
